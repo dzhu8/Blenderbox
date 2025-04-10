@@ -4,11 +4,251 @@ import pyrender
 import trimesh
 import random
 import math
+import json
 from utils import get_object_dimensions, calculate_camera_distance
 
 # Add compatibility for libraries using np.infty
 if not hasattr(np, 'infty'):
     np.infty = np.inf
+
+def inspect_materials(mesh_or_scene, detailed=True):
+    """
+    Locate and display all materials in a trimesh object or scene.
+    
+    Args:
+        mesh_or_scene: A trimesh.Mesh, trimesh.Scene object, or a string filepath to a 3D model file
+        detailed (bool): Whether to show detailed information about each material property
+        
+    Returns:
+        materials_dict: Dictionary of materials found, with properties as nested dictionaries
+    """
+    # Load the file if a string is provided
+    if isinstance(mesh_or_scene, str):
+        if not os.path.exists(mesh_or_scene):
+            raise FileNotFoundError(f"File not found: {mesh_or_scene}")
+        try:
+            print(f"Loading model from: {mesh_or_scene}")
+            mesh_or_scene = trimesh.load(mesh_or_scene)
+        except Exception as e:
+            raise ValueError(f"Failed to load 3D model from {mesh_or_scene}: {str(e)}")
+    
+    materials_dict = {}
+    material_index = 0
+    
+    # Process all meshes in a scene
+    if isinstance(mesh_or_scene, trimesh.Scene):
+        print(f"\nFound {len(mesh_or_scene.geometry)} geometries in scene")
+        
+        # Iterate through all geometries in the scene
+        for mesh_name, mesh in mesh_or_scene.geometry.items():
+            # Check if mesh has material
+            if hasattr(mesh, 'visual') and hasattr(mesh.visual, 'material'):
+                material = mesh.visual.material
+                material_name = f"Material_{material_index}"
+                
+                # Try to get material name if available
+                if hasattr(material, 'name') and material.name:
+                    material_name = material.name
+                
+                print(f"\n{'-' * 80}")
+                print(f"Material found in mesh: {mesh_name}")
+                print(f"Material type: {type(material).__name__}")
+                
+                # Store material properties
+                material_props = extract_material_properties(material, detailed)
+                
+                # Add to materials dictionary
+                materials_dict[material_name] = {
+                    "mesh": mesh_name,
+                    "type": type(material).__name__,
+                    "properties": material_props
+                }
+                
+                material_index += 1
+    
+    # Process a single mesh
+    elif hasattr(mesh_or_scene, 'visual') and hasattr(mesh_or_scene.visual, 'material'):
+        material = mesh_or_scene.visual.material
+        material_name = f"Material_{material_index}"
+        
+        # Try to get material name if available
+        if hasattr(material, 'name') and material.name:
+            material_name = material.name
+            
+        print(f"\n{'-' * 80}")
+        print(f"Material found in single mesh")
+        print(f"Material type: {type(material).__name__}")
+        
+        # Store material properties
+        material_props = extract_material_properties(material, detailed)
+        
+        # Add to materials dictionary
+        materials_dict[material_name] = {
+            "mesh": "single_mesh",
+            "type": type(material).__name__,
+            "properties": material_props
+        }
+    
+    # Summary
+    print(f"\n{'-' * 80}")
+    print(f"Total materials found: {len(materials_dict)}")
+    
+    return materials_dict
+
+
+def extract_material_properties(material, detailed=True):
+    """
+    Extract all properties from a material object.
+    
+    Args:
+        material: A material object (PBRMaterial, SimpleMaterial, etc.)
+        detailed (bool): Whether to show detailed information about each property
+        
+    Returns:
+        properties: Dictionary of material properties
+    """
+    properties = {}
+    
+    # Common properties to check for in PBR materials
+    pbr_properties = [
+        'baseColorFactor', 'metallicFactor', 'roughnessFactor', 
+        'emissiveFactor', 'normalTexture', 'occlusionTexture',
+        'emissiveTexture', 'baseColorTexture', 'metallicRoughnessTexture',
+        'normalScale', 'occlusionStrength', 'alphaCutoff',
+        'alphaMode', 'doubleSided', 'ior', 'name'
+    ]
+    
+    # Common properties for standard materials
+    standard_properties = ['ambient', 'diffuse', 'specular', 'glossiness', 'opacity']
+    
+    # Check if it's a PBR material
+    if isinstance(material, trimesh.visual.material.PBRMaterial):
+        for prop in pbr_properties:
+            if hasattr(material, prop):
+                value = getattr(material, prop)
+                properties[prop] = format_property_value(prop, value)
+                
+                if detailed:
+                    print(f"  {prop}: {format_property_value(prop, value)}")
+    
+    # Check for standard material properties
+    elif isinstance(material, (trimesh.visual.material.SimpleMaterial, trimesh.visual.material.Material)):
+        for prop in standard_properties:
+            if hasattr(material, prop):
+                value = getattr(material, prop)
+                properties[prop] = format_property_value(prop, value)
+                
+                if detailed:
+                    print(f"  {prop}: {format_property_value(prop, value)}")
+    
+    # Get all public attributes
+    else:
+        for attr_name in dir(material):
+            # Skip private attributes, methods, and common built-ins
+            if attr_name.startswith('_') or callable(getattr(material, attr_name)) or \
+               attr_name in ('copy', 'from_color', 'to_color', 'bytearray'):
+                continue
+                
+            try:
+                value = getattr(material, attr_name)
+                properties[attr_name] = format_property_value(attr_name, value)
+                
+                if detailed:
+                    print(f"  {attr_name}: {format_property_value(attr_name, value)}")
+            except:
+                # Skip properties that can't be easily accessed or serialized
+                pass
+    
+    # Check for textures
+    if hasattr(material, 'image'):
+        if material.image is not None:
+            properties['has_texture'] = True
+            properties['texture_shape'] = material.image.shape if hasattr(material.image, 'shape') else 'Unknown'
+            
+            if detailed:
+                print(f"  has_texture: True")
+                print(f"  texture_shape: {properties['texture_shape']}")
+        else:
+            properties['has_texture'] = False
+    
+    return properties
+
+
+def format_property_value(prop_name, value):
+    """
+    Format property value for display and storage.
+    
+    Args:
+        prop_name: Name of the property
+        value: Value of the property
+        
+    Returns:
+        Formatted value as string or native type
+    """
+    # Handle color factors which are typically arrays
+    if prop_name in ['baseColorFactor', 'emissiveFactor', 'diffuse', 'ambient', 'specular']:
+        if hasattr(value, '__iter__'):
+            # Format as RGB or RGBA
+            if len(value) == 3:
+                return f"RGB({value[0]:.3f}, {value[1]:.3f}, {value[2]:.3f})"
+            elif len(value) == 4:
+                return f"RGBA({value[0]:.3f}, {value[1]:.3f}, {value[2]:.3f}, {value[3]:.3f})"
+            else:
+                return str(value)
+        else:
+            return str(value)
+    
+    # Handle numeric values
+    elif prop_name in ['metallicFactor', 'roughnessFactor', 'normalScale', 
+                       'occlusionStrength', 'alphaCutoff', 'ior', 'opacity', 'glossiness']:
+        if isinstance(value, (int, float)):
+            return f"{value:.4f}"
+        else:
+            return str(value)
+    
+    # Handle boolean properties
+    elif prop_name in ['doubleSided']:
+        return bool(value)
+    
+    # Handle string properties
+    elif prop_name in ['alphaMode', 'name']:
+        return str(value)
+    
+    # Handle texture objects specially
+    elif prop_name.endswith('Texture'):
+        return "Texture object present" if value is not None else "None"
+    
+    # Default handling for other types
+    else:
+        # Try to convert numpy arrays to lists for JSON compatibility
+        if isinstance(value, np.ndarray):
+            return value.tolist()
+        
+        # For other types, attempt string conversion
+        try:
+            return json.dumps(value)
+        except:
+            return str(value)
+
+def save_material_info(materials_dict, output_file='material_info.json'):
+    """
+    Save material information to a JSON file.
+    
+    Args:
+        materials_dict: Dictionary of materials
+        output_file: Path to save the JSON file
+        
+    Returns:
+        bool: True if saved successfully, False otherwise
+    """
+    try:
+        with open(output_file, 'w') as f:
+            json.dump(materials_dict, f, indent=2)
+        print(f"\nMaterial information saved to: {output_file}")
+        return True
+    except Exception as e:
+        print(f"Error saving material information: {e}")
+        return False
 
 def optimize_light_positions(num_lights, distances=None, max_iterations=1000):
     """
@@ -323,7 +563,7 @@ def view_glb_file(file_path, **kwargs):
 if __name__ == "__main__":
     glb_file_path = "C:/Users/danie/OneDrive/Desktop/Fun_Apps/GithubCity/assets/building_1x1_0_f.glb"
     # Uncomment to view the GLB file in a 3D viewer
-    view_glb_file(glb_file_path, light_intensities=100.0)
+    #view_glb_file(glb_file_path, light_intensities=100.0)
     # Check dimensions
     dimensions = get_object_dimensions(glb_file_path)
     print("\nObject Dimensions:")
@@ -331,6 +571,9 @@ if __name__ == "__main__":
     print(f"Width (X-axis): {dimensions['width']:.3f} units")
     print(f"Depth (Z-axis): {dimensions['depth']:.3f} units")
     
+    # Inspect materials
+    materials = inspect_materials(glb_file_path, detailed=True)
+    save_material_info(materials, output_file='./outputs/material_info.json')
     
     # Example of creating and visualizing a simple trimesh object
     # mesh = trimesh.creation.box(extents=[1, 1, 1])  # Create a simple box
