@@ -410,7 +410,6 @@ def view_trimesh_object(
     light_distances: Optional[Union[List[float], float]] = None,
     light_intensities: Optional[Union[List[float], float]] = None,
     use_raymond_lighting: bool = False,
-    screen_fill_percentage: float = 0.75,
 ) -> None:
     """
     Visualize a trimesh object (Mesh or Scene) directly
@@ -432,9 +431,6 @@ def view_trimesh_object(
                           Recommendation: 50.0
         use_raymond_lighting: Whether to use pyrender's default raymond lighting setup.
                             Set to False to remove the default three lights.
-        screen_fill_percentage: How much of the screen should be filled by the object (0.1 to 1.0)
-                               Higher values zoom in closer, lower values zoom out further.
-                               Default: 0.75 (object fills 75% of the screen)
 
     Returns:
         None
@@ -592,15 +588,11 @@ def view_trimesh_object(
         # Calculate the scene dimensions from bounds
         centroid = (bounds[0] + bounds[1]) / 2.0
         extents = bounds[1] - bounds[0]
-        scale = max(extents)
-
-        # Calculate camera position to ensure the entire object is visible
+        scale = max(extents)        # Calculate camera position to ensure the entire object is visible
         # Position the camera at a distance that ensures the object fits in view
         # using a standard field of view
         fov = np.pi / 3.0  # 60 degrees
-        distance = calculate_camera_distance(
-            scale, fov, screen_fill_percentage
-        )  # Pass the screen_fill_percentage
+        distance = calculate_camera_distance(scale, fov)
 
         # Create a camera pose looking at the centroid from a distance
         camera_pose = np.eye(4)
