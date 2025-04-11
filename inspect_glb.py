@@ -588,7 +588,9 @@ def view_trimesh_object(
         # Calculate the scene dimensions from bounds
         centroid = (bounds[0] + bounds[1]) / 2.0
         extents = bounds[1] - bounds[0]
-        scale = max(extents)        # Calculate camera position to ensure the entire object is visible
+        scale = max(
+            extents
+        )  # Calculate camera position to ensure the entire object is visible
         # Position the camera at a distance that ensures the object fits in view
         # using a standard field of view
         fov = np.pi / 3.0  # 60 degrees

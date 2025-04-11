@@ -133,7 +133,8 @@ class Circle:
     - segments: The number of segments around the circle's perimeter
     - facing: The direction the circle faces ('up', 'down', or a custom vector)
     - position: The center position of the circle
-    """    
+    """
+
     def __init__(
         self,
         radius: float = 1.0,
@@ -158,12 +159,12 @@ class Circle:
             thickness: Thickness of the circle in the normal direction (default: None)
                       If provided, creates a 3D disk with the specified thickness.
                       If None, defaults to 1% of the radius (0.01 * radius)
-        """        
+        """
         self.radius = max(0.01, radius)  # Ensure minimum valid radius
         self.segments = max(3, segments)  # Minimum 3 segments required for a valid mesh
         self.position = position if position else [0.0, 0.0, 0.0]
         self.name = name
-        
+
         # Set default thickness to 1% of radius if not specified
         self.thickness = thickness if thickness is not None else 0.01 * self.radius
 
@@ -192,8 +193,8 @@ class Circle:
         length = math.sqrt(sum(x * x for x in vec))
         if length < 1e-6:  # Avoid division by zero
             return [0.0, 1.0, 0.0]  # Default to up if input is a zero vector
-        return [x / length for x in vec]    
-    
+        return [x / length for x in vec]
+
     def _create_circle_mesh(self) -> trimesh.Trimesh:
         """
         Create the circle mesh with the specified parameters.
@@ -208,11 +209,11 @@ class Circle:
         else:
             # Otherwise create a 3D disk with thickness
             return self._create_3d_disk_mesh()
-            
+
     def _create_flat_circle_mesh(self) -> trimesh.Trimesh:
         """
         Create a flat circle mesh (2D).
-        
+
         Returns:
             A trimesh.Trimesh object representing a flat circle
         """
@@ -242,77 +243,77 @@ class Circle:
                 faces.append([0, next_idx, curr_idx])
             else:
                 # For upward-facing circles
-                faces.append([0, curr_idx, next_idx])        # Create the mesh
+                faces.append([0, curr_idx, next_idx])  # Create the mesh
         circle_mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
         return circle_mesh
-        
+
     def _create_3d_disk_mesh(self) -> trimesh.Trimesh:
         """
         Create a 3D disk mesh with the specified thickness.
-        
+
         Returns:
             A trimesh.Trimesh object representing a 3D disk
         """
         # Calculate half thickness for top and bottom faces
         half_thickness = self.thickness / 2.0
-        
+
         vertices = []
-        
+
         # Create top face vertices (including center)
         top_center_idx = len(vertices)
         vertices.append([0.0, half_thickness, 0.0])  # Top center
-        
+
         top_perimeter_start_idx = len(vertices)
         for i in range(self.segments):
             angle = 2.0 * math.pi * i / self.segments
             x = self.radius * math.cos(angle)
             z = self.radius * math.sin(angle)
             vertices.append([x, half_thickness, z])  # Top perimeter
-            
+
         # Create bottom face vertices (including center)
         bottom_center_idx = len(vertices)
         vertices.append([0.0, -half_thickness, 0.0])  # Bottom center
-        
+
         bottom_perimeter_start_idx = len(vertices)
         for i in range(self.segments):
             angle = 2.0 * math.pi * i / self.segments
             x = self.radius * math.cos(angle)
             z = self.radius * math.sin(angle)
             vertices.append([x, -half_thickness, z])  # Bottom perimeter
-            
+
         faces = []
-        
+
         # Create top face triangles
         for i in range(self.segments):
             curr_idx = top_perimeter_start_idx + i
             next_idx = top_perimeter_start_idx + (i + 1) % self.segments
-            
+
             if self.reverse_winding:
                 faces.append([top_center_idx, next_idx, curr_idx])
             else:
                 faces.append([top_center_idx, curr_idx, next_idx])
-                
+
         # Create bottom face triangles
         for i in range(self.segments):
             curr_idx = bottom_perimeter_start_idx + i
             next_idx = bottom_perimeter_start_idx + (i + 1) % self.segments
-            
+
             if self.reverse_winding:
                 faces.append([bottom_center_idx, curr_idx, next_idx])
             else:
                 faces.append([bottom_center_idx, next_idx, curr_idx])
-                
+
         # Create side faces (connecting top and bottom perimeters)
         for i in range(self.segments):
             top_curr = top_perimeter_start_idx + i
             top_next = top_perimeter_start_idx + (i + 1) % self.segments
             bottom_curr = bottom_perimeter_start_idx + i
             bottom_next = bottom_perimeter_start_idx + (i + 1) % self.segments
-            
+
             # Add two triangles to form a quad for each side segment
             faces.append([top_curr, bottom_curr, top_next])
             faces.append([bottom_curr, bottom_next, top_next])
-            
+
         # Create the mesh
         disk_mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
 
@@ -417,7 +418,8 @@ class Cylinder:
     Qualities- the cylinder features:
     - three meshes: the top, bottom and perimeter meshes, allowing for each of these three
     surfaces to be assigned different materials (or be replaced by slightly different components).
-    """    
+    """
+
     def __init__(
         self,
         radius: float = 1.0,
@@ -449,14 +451,14 @@ class Cylinder:
             thickness: Thickness of the cylinder wall (default: None)
                       If provided, creates a solid cylinder with the specified wall thickness.
                       If None, defaults to 1% of the height (0.01 * height)
-        """        
+        """
         self.radius = max(0.01, radius)  # Ensure minimum valid radius
         self.height = max(0.01, height)  # Ensure minimum valid height
         self.segments = max(3, segments)  # Minimum 3 segments required for a valid mesh
         self.caps = caps
         self.position = position if position else [0.0, 0.0, 0.0]
         self.name = name
-        
+
         # Set default thickness to 1% of height if not specified
         self.thickness = thickness if thickness is not None else 0.01 * self.height
 
@@ -495,8 +497,8 @@ class Cylinder:
             if self.top_mesh:
                 self.top_mesh.apply_transform(T)
             if self.bottom_mesh:
-                self.bottom_mesh.apply_transform(T)    
-                
+                self.bottom_mesh.apply_transform(T)
+
     def _create_side_mesh(self) -> trimesh.Trimesh:
         """
         Create the cylinder side (perimeter) mesh with its material.
@@ -511,11 +513,11 @@ class Cylinder:
         else:
             # Otherwise create a solid wall with thickness
             return self._create_solid_side_mesh()
-            
+
     def _create_hollow_side_mesh(self) -> trimesh.Trimesh:
         """
         Create a hollow cylinder side mesh (original behavior).
-        
+
         Returns:
             A trimesh.Trimesh object representing the hollow cylinder sides
         """
@@ -545,19 +547,19 @@ class Cylinder:
             faces.append([i1, i2, i3])  # Second triangle        # Create the mesh
         side_mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
         return side_mesh
-            
+
     def _create_solid_side_mesh(self) -> trimesh.Trimesh:
         """
         Create a solid cylinder side mesh with thickness.
-        
+
         Returns:
             A trimesh.Trimesh object representing the solid cylinder sides
         """
         # Calculate inner radius by subtracting thickness
         inner_radius = max(0.001, self.radius - self.thickness)
-        
+
         vertices = []
-        
+
         # Create outer wall vertices
         outer_bottom_start = len(vertices)
         for i in range(self.segments):
@@ -565,14 +567,14 @@ class Cylinder:
             x = self.radius * math.cos(angle)
             z = self.radius * math.sin(angle)
             vertices.append([x, -self.height / 2, z])  # Outer bottom
-            
+
         outer_top_start = len(vertices)
         for i in range(self.segments):
             angle = 2.0 * math.pi * i / self.segments
             x = self.radius * math.cos(angle)
             z = self.radius * math.sin(angle)
             vertices.append([x, self.height / 2, z])  # Outer top
-            
+
         # Create inner wall vertices
         inner_bottom_start = len(vertices)
         for i in range(self.segments):
@@ -580,49 +582,53 @@ class Cylinder:
             x = inner_radius * math.cos(angle)
             z = inner_radius * math.sin(angle)
             vertices.append([x, -self.height / 2, z])  # Inner bottom
-            
+
         inner_top_start = len(vertices)
         for i in range(self.segments):
             angle = 2.0 * math.pi * i / self.segments
             x = inner_radius * math.cos(angle)
             z = inner_radius * math.sin(angle)
             vertices.append([x, self.height / 2, z])  # Inner top
-            
+
         faces = []
-        
+
         # Create outer wall faces
         for i in range(self.segments):
             i_curr = i
             i_next = (i + 1) % self.segments
-            
+
             # Outer wall faces (outward facing)
             o_bottom_curr = outer_bottom_start + i_curr
             o_bottom_next = outer_bottom_start + i_next
             o_top_curr = outer_top_start + i_curr
             o_top_next = outer_top_start + i_next
-            
+
             # Add two triangles for the outer rectangular face
             faces.append([o_bottom_curr, o_bottom_next, o_top_curr])  # First triangle
             faces.append([o_top_curr, o_bottom_next, o_top_next])  # Second triangle
-            
+
             # Inner wall faces (inward facing)
             i_bottom_curr = inner_bottom_start + i_curr
             i_bottom_next = inner_bottom_start + i_next
             i_top_curr = inner_top_start + i_curr
             i_top_next = inner_top_start + i_next
-            
+
             # Add two triangles for the inner rectangular face (reversed winding)
             faces.append([i_bottom_curr, i_top_curr, i_bottom_next])  # First triangle
             faces.append([i_top_curr, i_top_next, i_bottom_next])  # Second triangle
-            
+
             # Top edge faces connecting outer and inner walls
             faces.append([o_top_curr, o_top_next, i_top_curr])  # First triangle
             faces.append([i_top_curr, o_top_next, i_top_next])  # Second triangle
-            
+
             # Bottom edge faces connecting outer and inner walls
-            faces.append([o_bottom_next, o_bottom_curr, i_bottom_curr]) # First triangle
-            faces.append([o_bottom_next, i_bottom_curr, i_bottom_next]) # Second triangle
-            
+            faces.append(
+                [o_bottom_next, o_bottom_curr, i_bottom_curr]
+            )  # First triangle
+            faces.append(
+                [o_bottom_next, i_bottom_curr, i_bottom_next]
+            )  # Second triangle
+
         # Create the mesh
         side_mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
 
