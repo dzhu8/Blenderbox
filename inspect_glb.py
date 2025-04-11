@@ -694,7 +694,7 @@ def view_glb_file(file_path: str, **kwargs: Any) -> None:
 if __name__ == "__main__":
     glb_file_path = "C:/Users/danie/OneDrive/Desktop/Fun_Apps/GithubCity/assets/building_1x1_0_f.glb"
     # Uncomment to view the GLB file in a 3D viewer
-    # view_glb_file(glb_file_path, light_intensities=100.0)
+    view_glb_file(glb_file_path, light_intensities=100.0)
     # Check dimensions
     dimensions = get_object_dimensions(glb_file_path)
     print("\nObject Dimensions:")
