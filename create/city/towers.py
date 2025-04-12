@@ -28,9 +28,9 @@ if __name__ == "__main__":
 
     # Create a cylinder with adjusted materials
     glass_tower = Cylinder(
-        radius=1.5,
+        radius=2.5,
         height=5.0,
-        segments=8,
+        segments=16,
         caps=True,
         side_material=light_blue_glass,
         top_material=chrome_top,
@@ -44,4 +44,5 @@ if __name__ == "__main__":
         background_color=[0.2, 0.2, 0.3, 1.0],  # Dark blue background
         num_lights=8,  # More lights to show glass reflections
         light_intensities=300.0,
+        use_raymond_lighting=True
     )

@@ -516,133 +516,394 @@ class Cylinder:
 
     def _create_hollow_side_mesh(self) -> trimesh.Trimesh:
         """
-        Create a hollow cylinder side mesh (original behavior).
+        Create a hollow cylinder side mesh with beveled edges between segments.
 
         Returns:
-            A trimesh.Trimesh object representing the hollow cylinder sides
+            A trimesh.Trimesh object representing the hollow cylinder sides with beveled segment edges
         """
         # Create vertices for the cylinder wall
         vertices = []
-        for i in range(self.segments):
-            angle = 2.0 * math.pi * i / self.segments
-            x = self.radius * math.cos(angle)
-            z = self.radius * math.sin(angle)
 
-            # Bottom vertex
+        # Define bevel size as a fraction of the segment angle
+        bevel_fraction = 0.01  
+        segment_angle = 2.0 * math.pi / self.segments
+        bevel_angle = segment_angle * bevel_fraction
+        
+        # Each segment now has a main face and two beveled edges
+        for i in range(self.segments):
+            # Calculate angles for this segment
+            main_start_angle = i * segment_angle + bevel_angle
+            main_end_angle = (i + 1) * segment_angle - bevel_angle
+            
+            # Left bevel start angle (end of previous segment's main part)
+            left_start_angle = i * segment_angle - bevel_angle if i > 0 else (self.segments - 1) * segment_angle - bevel_angle
+            left_end_angle = i * segment_angle + bevel_angle
+            
+            # Right bevel start angle (end of this segment's main part)
+            right_start_angle = (i + 1) * segment_angle - bevel_angle
+            right_end_angle = (i + 1) * segment_angle + bevel_angle if i < self.segments - 1 else bevel_angle
+            
+            # ----- Main face vertices -----
+            # Bottom-left corner (main face)
+            x = self.radius * math.cos(main_start_angle)
+            z = self.radius * math.sin(main_start_angle)
             vertices.append([x, -self.height / 2, z])
-            # Top vertex
+            
+            # Top-left corner (main face)
             vertices.append([x, self.height / 2, z])
+            
+            # Top-right corner (main face)
+            x = self.radius * math.cos(main_end_angle)
+            z = self.radius * math.sin(main_end_angle)
+            vertices.append([x, self.height / 2, z])
+            
+            # Bottom-right corner (main face)
+            vertices.append([x, -self.height / 2, z])
+            
+            # ----- Left bevel face vertices -----
+            # Bottom-left corner (left bevel)
+            x = self.radius * math.cos(left_start_angle)
+            z = self.radius * math.sin(left_start_angle)
+            vertices.append([x, -self.height / 2, z])
+            
+            # Top-left corner (left bevel)
+            vertices.append([x, self.height / 2, z])
+            
+            # Top-right corner (left bevel)
+            x = self.radius * math.cos(left_end_angle)
+            z = self.radius * math.sin(left_end_angle)
+            vertices.append([x, self.height / 2, z])
+            
+            # Bottom-right corner (left bevel)
+            vertices.append([x, -self.height / 2, z])
+            
+            # ----- Right bevel face vertices -----
+            # Bottom-left corner (right bevel)
+            x = self.radius * math.cos(right_start_angle)
+            z = self.radius * math.sin(right_start_angle)
+            vertices.append([x, -self.height / 2, z])
+            
+            # Top-left corner (right bevel)
+            vertices.append([x, self.height / 2, z])
+            
+            # Top-right corner (right bevel)
+            x = self.radius * math.cos(right_end_angle)
+            z = self.radius * math.sin(right_end_angle)
+            vertices.append([x, self.height / 2, z])
+            
+            # Bottom-right corner (right bevel)
+            vertices.append([x, -self.height / 2, z])
 
         # Create faces for the cylinder wall
         faces = []
         for i in range(self.segments):
-            # Calculate vertex indices
-            i0 = i * 2  # Bottom vertex of current segment
-            i1 = i * 2 + 1  # Top vertex of current segment
-            i2 = (i * 2 + 2) % (self.segments * 2)  # Bottom vertex of next segment
-            i3 = (i * 2 + 3) % (self.segments * 2)  # Top vertex of next segment
-
-            # Add two triangles for each rectangular face
-            faces.append([i0, i2, i1])  # First triangle
-            faces.append([i1, i2, i3])  # Second triangle        # Create the mesh
-        side_mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
-        return side_mesh
-
-    def _create_solid_side_mesh(self) -> trimesh.Trimesh:
-        """
-        Create a solid cylinder side mesh with thickness.
-
-        Returns:
-            A trimesh.Trimesh object representing the solid cylinder sides
-        """
-        # Calculate inner radius by subtracting thickness
-        inner_radius = max(0.001, self.radius - self.thickness)
-
-        vertices = []
-
-        # Create outer wall vertices
-        outer_bottom_start = len(vertices)
-        for i in range(self.segments):
-            angle = 2.0 * math.pi * i / self.segments
-            x = self.radius * math.cos(angle)
-            z = self.radius * math.sin(angle)
-            vertices.append([x, -self.height / 2, z])  # Outer bottom
-
-        outer_top_start = len(vertices)
-        for i in range(self.segments):
-            angle = 2.0 * math.pi * i / self.segments
-            x = self.radius * math.cos(angle)
-            z = self.radius * math.sin(angle)
-            vertices.append([x, self.height / 2, z])  # Outer top
-
-        # Create inner wall vertices
-        inner_bottom_start = len(vertices)
-        for i in range(self.segments):
-            angle = 2.0 * math.pi * i / self.segments
-            x = inner_radius * math.cos(angle)
-            z = inner_radius * math.sin(angle)
-            vertices.append([x, -self.height / 2, z])  # Inner bottom
-
-        inner_top_start = len(vertices)
-        for i in range(self.segments):
-            angle = 2.0 * math.pi * i / self.segments
-            x = inner_radius * math.cos(angle)
-            z = inner_radius * math.sin(angle)
-            vertices.append([x, self.height / 2, z])  # Inner top
-
-        faces = []
-
-        # Create outer wall faces
-        for i in range(self.segments):
-            i_curr = i
-            i_next = (i + 1) % self.segments
-
-            # Outer wall faces (outward facing)
-            o_bottom_curr = outer_bottom_start + i_curr
-            o_bottom_next = outer_bottom_start + i_next
-            o_top_curr = outer_top_start + i_curr
-            o_top_next = outer_top_start + i_next
-
-            # Add two triangles for the outer rectangular face
-            faces.append([o_bottom_curr, o_bottom_next, o_top_curr])  # First triangle
-            faces.append([o_top_curr, o_bottom_next, o_top_next])  # Second triangle
-
-            # Inner wall faces (inward facing)
-            i_bottom_curr = inner_bottom_start + i_curr
-            i_bottom_next = inner_bottom_start + i_next
-            i_top_curr = inner_top_start + i_curr
-            i_top_next = inner_top_start + i_next
-
-            # Add two triangles for the inner rectangular face (reversed winding)
-            faces.append([i_bottom_curr, i_top_curr, i_bottom_next])  # First triangle
-            faces.append([i_top_curr, i_top_next, i_bottom_next])  # Second triangle
-
-            # Top edge faces connecting outer and inner walls
-            faces.append([o_top_curr, o_top_next, i_top_curr])  # First triangle
-            faces.append([i_top_curr, o_top_next, i_top_next])  # Second triangle
-
-            # Bottom edge faces connecting outer and inner walls
-            faces.append(
-                [o_bottom_next, o_bottom_curr, i_bottom_curr]
-            )  # First triangle
-            faces.append(
-                [o_bottom_next, i_bottom_curr, i_bottom_next]
-            )  # Second triangle
-
+            # For each segment, we have a main face and two bevels, each with 4 vertices
+            base_idx = i * 12  # 12 vertices per segment (4 main + 4 left bevel + 4 right bevel)
+            
+            # Main face triangles
+            main_bl = base_idx      # main bottom-left
+            main_tl = base_idx + 1  # main top-left
+            main_tr = base_idx + 2  # main top-right
+            main_br = base_idx + 3  # main bottom-right
+            
+            faces.append([main_bl, main_br, main_tl])  # First triangle
+            faces.append([main_tl, main_br, main_tr])  # Second triangle
+            
+            # Left bevel triangles
+            left_bl = base_idx + 4  # left bevel bottom-left
+            left_tl = base_idx + 5  # left bevel top-left
+            left_tr = base_idx + 6  # left bevel top-right
+            left_br = base_idx + 7  # left bevel bottom-right
+            
+            faces.append([left_bl, left_br, left_tl])  # First triangle
+            faces.append([left_tl, left_br, left_tr])  # Second triangle
+            
+            # Right bevel triangles
+            right_bl = base_idx + 8   # right bevel bottom-left
+            right_tl = base_idx + 9   # right bevel top-left
+            right_tr = base_idx + 10  # right bevel top-right
+            right_br = base_idx + 11  # right bevel bottom-right
+            
+            faces.append([right_bl, right_br, right_tl])  # First triangle
+            faces.append([right_tl, right_br, right_tr])  # Second triangle
+            
         # Create the mesh
         side_mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
-
+        
         # Apply material
         pbr_material = trimesh.visual.material.PBRMaterial(
-            baseColorFactor=self.side_material.get(
-                "baseColorFactor", [1.0, 1.0, 1.0, 1.0]
-            ),
+            baseColorFactor=self.side_material.get("baseColorFactor", [1.0, 1.0, 1.0, 1.0]),
             metallicFactor=self.side_material.get("metallicFactor", 0.0),
             roughnessFactor=self.side_material.get("roughnessFactor", 0.0),
             emissiveFactor=self.side_material.get("emissiveFactor", [0.0, 0.0, 0.0]),
             doubleSided=self.side_material.get("doubleSided", False),
         )
+        
+        # Apply material to mesh
+        side_mesh.visual.material = pbr_material
+        return side_mesh    
+    
+    def _create_solid_side_mesh(self) -> trimesh.Trimesh:
+        """
+        Create a solid cylinder side mesh with thickness and beveled edges between segments.
 
+        Returns:
+            A trimesh.Trimesh object representing the solid cylinder sides with beveled edges
+        """
+        # Calculate inner radius by subtracting thickness
+        inner_radius = max(0.001, self.radius - self.thickness)
+
+        # Define bevel size as a fraction of the segment angle
+        bevel_fraction = 0.01
+        segment_angle = 2.0 * math.pi / self.segments
+        bevel_angle = segment_angle * bevel_fraction
+        
+        vertices = []
+        
+        # Each segment now has a main face and two beveled edges, both for outer and inner surfaces
+        for i in range(self.segments):
+            # Calculate angles for this segment
+            main_start_angle = i * segment_angle + bevel_angle
+            main_end_angle = (i + 1) * segment_angle - bevel_angle
+            
+            # Left bevel start angle (end of previous segment's main part)
+            left_start_angle = i * segment_angle - bevel_angle if i > 0 else (self.segments - 1) * segment_angle - bevel_angle
+            left_end_angle = i * segment_angle + bevel_angle
+            
+            # Right bevel start angle (end of this segment's main part)
+            right_start_angle = (i + 1) * segment_angle - bevel_angle
+            right_end_angle = (i + 1) * segment_angle + bevel_angle if i < self.segments - 1 else bevel_angle
+            
+            # ----- OUTER SURFACE VERTICES -----
+            
+            # ----- Main face vertices (outer) -----
+            # Bottom-left corner (main face)
+            x = self.radius * math.cos(main_start_angle)
+            z = self.radius * math.sin(main_start_angle)
+            vertices.append([x, -self.height / 2, z])  # 0: outer main bottom-left
+            
+            # Top-left corner (main face)
+            vertices.append([x, self.height / 2, z])   # 1: outer main top-left
+            
+            # Top-right corner (main face)
+            x = self.radius * math.cos(main_end_angle)
+            z = self.radius * math.sin(main_end_angle)
+            vertices.append([x, self.height / 2, z])   # 2: outer main top-right
+            
+            # Bottom-right corner (main face)
+            vertices.append([x, -self.height / 2, z])  # 3: outer main bottom-right
+            
+            # ----- Left bevel face vertices (outer) -----
+            # Bottom-left corner (left bevel)
+            x = self.radius * math.cos(left_start_angle)
+            z = self.radius * math.sin(left_start_angle)
+            vertices.append([x, -self.height / 2, z])  # 4: outer left bevel bottom-left
+            
+            # Top-left corner (left bevel)
+            vertices.append([x, self.height / 2, z])   # 5: outer left bevel top-left
+            
+            # Top-right corner (left bevel)
+            x = self.radius * math.cos(left_end_angle)
+            z = self.radius * math.sin(left_end_angle)
+            vertices.append([x, self.height / 2, z])   # 6: outer left bevel top-right
+            
+            # Bottom-right corner (left bevel)
+            vertices.append([x, -self.height / 2, z])  # 7: outer left bevel bottom-right
+            
+            # ----- Right bevel face vertices (outer) -----
+            # Bottom-left corner (right bevel)
+            x = self.radius * math.cos(right_start_angle)
+            z = self.radius * math.sin(right_start_angle)
+            vertices.append([x, -self.height / 2, z])  # 8: outer right bevel bottom-left
+            
+            # Top-left corner (right bevel)
+            vertices.append([x, self.height / 2, z])   # 9: outer right bevel top-left
+            
+            # Top-right corner (right bevel)
+            x = self.radius * math.cos(right_end_angle)
+            z = self.radius * math.sin(right_end_angle)
+            vertices.append([x, self.height / 2, z])   # 10: outer right bevel top-right
+            
+            # Bottom-right corner (right bevel)
+            vertices.append([x, -self.height / 2, z])  # 11: outer right bevel bottom-right
+            
+            # ----- INNER SURFACE VERTICES -----
+            
+            # ----- Main face vertices (inner) -----
+            # Bottom-left corner (main face)
+            x = inner_radius * math.cos(main_start_angle)
+            z = inner_radius * math.sin(main_start_angle)
+            vertices.append([x, -self.height / 2, z])  # 12: inner main bottom-left
+            
+            # Top-left corner (main face)
+            vertices.append([x, self.height / 2, z])   # 13: inner main top-left
+            
+            # Top-right corner (main face)
+            x = inner_radius * math.cos(main_end_angle)
+            z = inner_radius * math.sin(main_end_angle)
+            vertices.append([x, self.height / 2, z])   # 14: inner main top-right
+            
+            # Bottom-right corner (main face)
+            vertices.append([x, -self.height / 2, z])  # 15: inner main bottom-right
+            
+            # ----- Left bevel face vertices (inner) -----
+            # Bottom-left corner (left bevel)
+            x = inner_radius * math.cos(left_start_angle)
+            z = inner_radius * math.sin(left_start_angle)
+            vertices.append([x, -self.height / 2, z])  # 16: inner left bevel bottom-left
+            
+            # Top-left corner (left bevel)
+            vertices.append([x, self.height / 2, z])   # 17: inner left bevel top-left
+            
+            # Top-right corner (left bevel)
+            x = inner_radius * math.cos(left_end_angle)
+            z = inner_radius * math.sin(left_end_angle)
+            vertices.append([x, self.height / 2, z])   # 18: inner left bevel top-right
+            
+            # Bottom-right corner (left bevel)
+            vertices.append([x, -self.height / 2, z])  # 19: inner left bevel bottom-right
+            
+            # ----- Right bevel face vertices (inner) -----
+            # Bottom-left corner (right bevel)
+            x = inner_radius * math.cos(right_start_angle)
+            z = inner_radius * math.sin(right_start_angle)
+            vertices.append([x, -self.height / 2, z])  # 20: inner right bevel bottom-left
+            
+            # Top-left corner (right bevel)
+            vertices.append([x, self.height / 2, z])   # 21: inner right bevel top-left
+            
+            # Top-right corner (right bevel)
+            x = inner_radius * math.cos(right_end_angle)
+            z = inner_radius * math.sin(right_end_angle)
+            vertices.append([x, self.height / 2, z])   # 22: inner right bevel top-right
+            
+            # Bottom-right corner (right bevel)
+            vertices.append([x, -self.height / 2, z])  # 23: inner right bevel bottom-right
+            
+        # Create faces for the cylinder wall
+        faces = []
+        
+        for i in range(self.segments):
+            base_idx = i * 24  # 24 vertices per segment (12 outer + 12 inner)
+            
+            # ----- OUTER SURFACE FACES -----
+            
+            # Main face triangles (outer surface)
+            o_main_bl = base_idx      # outer main bottom-left
+            o_main_tl = base_idx + 1  # outer main top-left
+            o_main_tr = base_idx + 2  # outer main top-right
+            o_main_br = base_idx + 3  # outer main bottom-right
+            
+            faces.append([o_main_bl, o_main_br, o_main_tl])  # First triangle
+            faces.append([o_main_tl, o_main_br, o_main_tr])  # Second triangle
+            
+            # Left bevel triangles (outer surface)
+            o_left_bl = base_idx + 4  # outer left bevel bottom-left
+            o_left_tl = base_idx + 5  # outer left bevel top-left
+            o_left_tr = base_idx + 6  # outer left bevel top-right
+            o_left_br = base_idx + 7  # outer left bevel bottom-right
+            
+            faces.append([o_left_bl, o_left_br, o_left_tl])  # First triangle
+            faces.append([o_left_tl, o_left_br, o_left_tr])  # Second triangle
+            
+            # Right bevel triangles (outer surface)
+            o_right_bl = base_idx + 8   # outer right bevel bottom-left
+            o_right_tl = base_idx + 9   # outer right bevel top-left
+            o_right_tr = base_idx + 10  # outer right bevel top-right
+            o_right_br = base_idx + 11  # outer right bevel bottom-right
+            
+            faces.append([o_right_bl, o_right_br, o_right_tl])  # First triangle
+            faces.append([o_right_tl, o_right_br, o_right_tr])  # Second triangle
+            
+            # ----- INNER SURFACE FACES (reversed winding) -----
+            
+            # Main face triangles (inner surface)
+            i_main_bl = base_idx + 12  # inner main bottom-left
+            i_main_tl = base_idx + 13  # inner main top-left
+            i_main_tr = base_idx + 14  # inner main top-right
+            i_main_br = base_idx + 15  # inner main bottom-right
+            
+            faces.append([i_main_bl, i_main_tl, i_main_br])  # First triangle (reversed)
+            faces.append([i_main_tl, i_main_tr, i_main_br])  # Second triangle (reversed)
+            
+            # Left bevel triangles (inner surface)
+            i_left_bl = base_idx + 16  # inner left bevel bottom-left
+            i_left_tl = base_idx + 17  # inner left bevel top-left
+            i_left_tr = base_idx + 18  # inner left bevel top-right
+            i_left_br = base_idx + 19  # inner left bevel bottom-right
+            
+            faces.append([i_left_bl, i_left_tl, i_left_br])  # First triangle (reversed)
+            faces.append([i_left_tl, i_left_tr, i_left_br])  # Second triangle (reversed)
+            
+            # Right bevel triangles (inner surface)
+            i_right_bl = base_idx + 20  # inner right bevel bottom-left
+            i_right_tl = base_idx + 21  # inner right bevel top-left
+            i_right_tr = base_idx + 22  # inner right bevel top-right
+            i_right_br = base_idx + 23  # inner right bevel bottom-right
+            
+            faces.append([i_right_bl, i_right_tl, i_right_br])  # First triangle (reversed)
+            faces.append([i_right_tl, i_right_tr, i_right_br])  # Second triangle (reversed)
+            
+            # ----- TOP EDGE FACES (connecting outer and inner) -----
+            
+            # Top main segment
+            faces.append([o_main_tl, o_main_tr, i_main_tl])  # First triangle
+            faces.append([i_main_tl, o_main_tr, i_main_tr])  # Second triangle
+            
+            # Top left bevel
+            faces.append([o_left_tl, o_left_tr, i_left_tl])  # First triangle
+            faces.append([i_left_tl, o_left_tr, i_left_tr])  # Second triangle
+            
+            # Top right bevel
+            faces.append([o_right_tl, o_right_tr, i_right_tl])  # First triangle
+            faces.append([i_right_tl, o_right_tr, i_right_tr])  # Second triangle
+            
+            # ----- BOTTOM EDGE FACES (connecting outer and inner) -----
+            
+            # Bottom main segment
+            faces.append([o_main_br, o_main_bl, i_main_bl])  # First triangle
+            faces.append([o_main_br, i_main_bl, i_main_br])  # Second triangle
+            
+            # Bottom left bevel
+            faces.append([o_left_br, o_left_bl, i_left_bl])  # First triangle
+            faces.append([o_left_br, i_left_bl, i_left_br])  # Second triangle
+            
+            # Bottom right bevel
+            faces.append([o_right_br, o_right_bl, i_right_bl])  # First triangle
+            faces.append([o_right_br, i_right_bl, i_right_br])  # Second triangle
+            
+            # ----- LEFT JOIN FACES -----
+            
+            # Connect outer left bevel to outer main
+            faces.append([o_left_tr, o_main_tl, o_left_br])  # First triangle
+            faces.append([o_left_br, o_main_tl, o_main_bl])  # Second triangle
+            
+            # Connect inner left bevel to inner main
+            faces.append([i_left_tr, i_left_br, i_main_tl])  # First triangle (reversed)
+            faces.append([i_left_br, i_main_bl, i_main_tl])  # Second triangle (reversed)
+            
+            # ----- RIGHT JOIN FACES -----
+            
+            # Connect outer main to outer right bevel
+            faces.append([o_main_tr, o_right_tl, o_main_br])  # First triangle
+            faces.append([o_main_br, o_right_tl, o_right_bl])  # Second triangle
+            
+            # Connect inner main to inner right bevel
+            faces.append([i_main_tr, i_main_br, i_right_tl])  # First triangle (reversed)
+            faces.append([i_main_br, i_right_bl, i_right_tl])  # Second triangle (reversed)
+            
+        # Create the mesh
+        side_mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
+        
+        # Apply material
+        pbr_material = trimesh.visual.material.PBRMaterial(
+            baseColorFactor=self.side_material.get("baseColorFactor", [1.0, 1.0, 1.0, 1.0]),
+            metallicFactor=self.side_material.get("metallicFactor", 0.0),
+            roughnessFactor=self.side_material.get("roughnessFactor", 0.0),
+            emissiveFactor=self.side_material.get("emissiveFactor", [0.0, 0.0, 0.0]),
+            doubleSided=self.side_material.get("doubleSided", False),
+        )
+        
         # Apply material to mesh
         side_mesh.visual.material = pbr_material
         return side_mesh
