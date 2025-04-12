@@ -44,5 +44,5 @@ if __name__ == "__main__":
         background_color=[0.2, 0.2, 0.3, 1.0],  # Dark blue background
         num_lights=8,  # More lights to show glass reflections
         light_intensities=300.0,
-        use_raymond_lighting=True
+        use_raymond_lighting=True,
     )
