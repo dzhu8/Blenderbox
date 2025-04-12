@@ -399,6 +399,689 @@ class Circle:
 
 
 # -----------------------------------------------------------------------------
+# Rectangular cap building block
+# -----------------------------------------------------------------------------
+class Rectangle:
+    """
+    A class for creating rectangular shapes.
+
+    This can be used independently or as a component in more complex shapes
+    like rectangular prism caps or other geometric primitives.
+
+    Specify:
+    - width: The width of the rectangle (X axis)
+    - depth: The depth of the rectangle (Z axis)
+    - facing: The direction the rectangle faces ('up', 'down', or a custom vector)
+    - position: The center position of the rectangle
+    """
+
+    def __init__(
+        self,
+        width: float = 2.0,
+        depth: float = 2.0,
+        facing: Union[str, List[float]] = "up",
+        position: Optional[List[float]] = None,
+        material: Optional[Dict[str, Any]] = None,
+        name: str = "rectangle",
+        thickness: Optional[float] = None,
+    ):
+        """
+        Initialize a rectangle object.
+
+        Args:
+            width: Width of the rectangle along X axis (default: 2.0)
+            depth: Depth of the rectangle along Z axis (default: 2.0)
+            facing: Direction the rectangle faces - 'up' (+Y), 'down' (-Y), or a custom [x,y,z] vector
+                    (default: 'up')
+            position: [x, y, z] position of the center of the rectangle (default: [0, 0, 0])
+            material: Dictionary of material properties (default: None, which uses DEFAULT_MATERIAL)
+            name: Name identifier for the rectangle object (default: "rectangle")
+            thickness: Thickness of the rectangle in the normal direction (default: None)
+                      If provided, creates a 3D block with the specified thickness.
+                      If None, defaults to 1% of the width (0.01 * width)
+        """
+        self.width = max(0.01, width)  # Ensure minimum valid width
+        self.depth = max(0.01, depth)  # Ensure minimum valid depth
+        self.position = position if position else [0.0, 0.0, 0.0]
+        self.name = name
+
+        # Set default thickness to 1% of width if not specified
+        self.thickness = thickness if thickness is not None else 0.01 * self.width
+
+        # Set material
+        self.material = material if material else DEFAULT_MATERIAL
+
+        # Handle the facing direction
+        if facing == "up":
+            self.normal = [0.0, 1.0, 0.0]  # Y+ direction
+            self.reverse_winding = False
+        elif facing == "down":
+            self.normal = [0.0, -1.0, 0.0]  # Y- direction
+            self.reverse_winding = True
+        else:
+            # Custom direction - normalize it
+            self.normal = self._normalize_vector(facing)
+
+            # If the normal points more downward than upward, reverse winding
+            self.reverse_winding = self.normal[1] < 0
+
+        # Create the mesh
+        self.mesh = self._create_rectangle_mesh()
+
+    def _normalize_vector(self, vec: List[float]) -> List[float]:
+        """Normalize a vector to unit length"""
+        length = math.sqrt(sum(x * x for x in vec))
+        if length < 1e-6:  # Avoid division by zero
+            return [0.0, 1.0, 0.0]  # Default to up if input is a zero vector
+        return [x / length for x in vec]
+
+    def _create_rectangle_mesh(self) -> trimesh.Trimesh:
+        """
+        Create the rectangle mesh with the specified parameters.
+        If thickness is set, creates a 3D block instead of a flat rectangle.
+
+        Returns:
+            A trimesh.Trimesh object representing the rectangle or block
+        """
+        if self.thickness <= 0:
+            # If thickness is zero or negative, create a flat rectangle
+            return self._create_flat_rectangle_mesh()
+        else:
+            # Otherwise create a 3D block with thickness
+            return self._create_3d_block_mesh()
+
+    def _create_flat_rectangle_mesh(self) -> trimesh.Trimesh:
+        """
+        Create a flat rectangle mesh (2D).
+
+        Returns:
+            A trimesh.Trimesh object representing a flat rectangle
+        """
+        # Create the vertices for the rectangle (centered at origin)
+        half_width = self.width / 2
+        half_depth = self.depth / 2
+
+        vertices = [
+            [-half_width, 0.0, -half_depth],  # bottom-left
+            [-half_width, 0.0, half_depth],  # top-left
+            [half_width, 0.0, half_depth],  # top-right
+            [half_width, 0.0, -half_depth],  # bottom-right
+        ]
+
+        # Create faces for the rectangle
+        if self.reverse_winding:
+            # For downward-facing rectangles, reverse triangle orientation
+            faces = [[0, 3, 1], [1, 3, 2]]
+        else:
+            # For upward-facing rectangles
+            faces = [[0, 1, 3], [1, 2, 3]]
+
+        # Create the mesh
+        rectangle_mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
+        return rectangle_mesh
+
+    def _create_3d_block_mesh(self) -> trimesh.Trimesh:
+        """
+        Create a 3D block mesh with the specified thickness.
+
+        Returns:
+            A trimesh.Trimesh object representing a 3D block
+        """
+        # Calculate half dimensions
+        half_width = self.width / 2
+        half_depth = self.depth / 2
+        half_thickness = self.thickness / 2
+
+        # Create vertices for the block (8 corners)
+        vertices = [
+            # Bottom face vertices (negative Y)
+            [-half_width, -half_thickness, -half_depth],  # 0: bottom-left-back
+            [-half_width, -half_thickness, half_depth],  # 1: bottom-left-front
+            [half_width, -half_thickness, half_depth],  # 2: bottom-right-front
+            [half_width, -half_thickness, -half_depth],  # 3: bottom-right-back
+            # Top face vertices (positive Y)
+            [-half_width, half_thickness, -half_depth],  # 4: top-left-back
+            [-half_width, half_thickness, half_depth],  # 5: top-left-front
+            [half_width, half_thickness, half_depth],  # 6: top-right-front
+            [half_width, half_thickness, -half_depth],  # 7: top-right-back
+        ]
+
+        # Create faces for the block (6 faces, 12 triangles)
+        faces = [
+            # Top face (positive Y)
+            [4, 5, 7],
+            [5, 6, 7],
+            # Bottom face (negative Y)
+            [0, 3, 1],
+            [1, 3, 2],
+            # Front face (positive Z)
+            [1, 2, 5],
+            [2, 6, 5],
+            # Back face (negative Z)
+            [0, 4, 3],
+            [3, 4, 7],
+            # Left face (negative X)
+            [0, 1, 4],
+            [1, 5, 4],
+            # Right face (positive X)
+            [2, 3, 6],
+            [3, 7, 6],
+        ]
+
+        # If facing downward, reverse the winding for proper orientation
+        if self.reverse_winding:
+            faces = [[v[0], v[2], v[1]] for v in faces]
+
+        # Create the mesh
+        block_mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
+
+        # Apply material
+        pbr_material = trimesh.visual.material.PBRMaterial(
+            baseColorFactor=self.material.get("baseColorFactor", [1.0, 1.0, 1.0, 1.0]),
+            metallicFactor=self.material.get("metallicFactor", 0.0),
+            roughnessFactor=self.material.get("roughnessFactor", 0.0),
+            emissiveFactor=self.material.get("emissiveFactor", [0.0, 0.0, 0.0]),
+            doubleSided=self.material.get("doubleSided", False),
+        )
+
+        # Apply material to mesh
+        block_mesh.visual.material = pbr_material
+
+        # Apply transformation to align with the specified normal and position
+        # First create a transformation that aligns with the normal vector
+        if self.normal != [0.0, 1.0, 0.0]:  # If not already facing up
+            # Find rotation from [0,1,0] to self.normal
+            up = np.array([0.0, 1.0, 0.0])
+            normal_vec = np.array(self.normal)
+
+            # Calculate rotation axis and angle
+            axis = np.cross(up, normal_vec)
+            axis_length = np.linalg.norm(axis)
+
+            if axis_length > 1e-6:  # If cross product is not zero
+                axis = axis / axis_length
+                angle = np.arccos(np.dot(up, normal_vec))
+
+                # Create rotation matrix
+                R = trimesh.transformations.rotation_matrix(angle, axis)
+                block_mesh.apply_transform(R)
+
+        # Apply position offset
+        if self.position != [0.0, 0.0, 0.0]:
+            T = np.eye(4)
+            T[:3, 3] = self.position
+            block_mesh.apply_transform(T)
+
+        return block_mesh
+
+    def get_mesh(self) -> trimesh.Trimesh:
+        """
+        Get the rectangle mesh object.
+
+        Returns:
+            The rectangle as a trimesh.Trimesh object
+        """
+        return self.mesh
+
+    def get_scene(self) -> trimesh.Scene:
+        """
+        Get the rectangle as a scene object.
+
+        Returns:
+            The rectangle as a trimesh.Scene object
+        """
+        scene = trimesh.Scene()
+        scene.add_geometry(self.mesh, node_name=self.name)
+        return scene
+
+    def update_material(self, material: Dict[str, Any]) -> None:
+        """
+        Update the material of the rectangle.
+
+        Args:
+            material: Dictionary of material properties
+        """
+        self.material = material
+
+        # Create and apply new material
+        pbr_material = trimesh.visual.material.PBRMaterial(
+            baseColorFactor=material.get("baseColorFactor", [1.0, 1.0, 1.0, 1.0]),
+            metallicFactor=material.get("metallicFactor", 0.0),
+            roughnessFactor=material.get("roughnessFactor", 0.0),
+            emissiveFactor=material.get("emissiveFactor", [0.0, 0.0, 0.0]),
+            doubleSided=material.get("doubleSided", False),
+        )
+
+        # Apply to mesh
+        self.mesh.visual.material = pbr_material
+
+
+# -----------------------------------------------------------------------------
+# Rectangular prism building block
+# -----------------------------------------------------------------------------
+class RectangularPrism:
+    """
+    A class for creating customizable rectangular prism objects with rectangular faces.
+
+    Specify:
+    - width: The width of the rectangular prism (X axis)
+    - height: The height of the rectangular prism (Y axis)
+    - depth: The depth of the rectangular prism (Z axis)
+
+    Additional options include:
+    - material properties
+    - position/orientation
+    - caps (whether to include top and bottom faces)
+
+    Qualities- the rectangular prism features:
+    - separate meshes for each face, allowing different materials for each surface
+    """
+
+    def __init__(
+        self,
+        width: float = 2.0,
+        height: float = 3.0,
+        depth: float = 2.0,
+        caps: bool = True,
+        position: Optional[List[float]] = None,
+        material: Optional[Dict[str, Any]] = None,
+        side_material: Optional[Dict[str, Any]] = None,
+        top_material: Optional[Dict[str, Any]] = None,
+        bottom_material: Optional[Dict[str, Any]] = None,
+        name: str = "rectangular_prism",
+        wall_thickness: Optional[float] = None,
+    ):
+        """
+        Initialize a rectangular prism object.
+
+        Args:
+            width: Width of the rectangular prism along X axis (default: 2.0)
+            height: Height of the rectangular prism along Y axis (default: 3.0)
+            depth: Depth of the rectangular prism along Z axis (default: 2.0)
+            caps: Whether to include top and bottom rectangular caps (default: True)
+            position: [x, y, z] position of the center of the prism (default: [0, 0, 0])
+            material: Dictionary of material properties for all parts (default: None, uses DEFAULT_MATERIAL)
+            side_material: Material for prism sides (default: None, uses material or DEFAULT_MATERIAL)
+            top_material: Material for top cap (default: None, uses material or DEFAULT_MATERIAL)
+            bottom_material: Material for bottom cap (default: None, uses material or DEFAULT_MATERIAL)
+            name: Name identifier for the rectangular prism object (default: "rectangular_prism")
+            wall_thickness: Thickness of the prism walls (default: None)
+                      If provided, creates hollow walls with the specified thickness.
+                      If None, defaults to 5% of the width (0.05 * width)
+        """
+        self.width = max(0.01, width)  # Ensure minimum valid width
+        self.height = max(0.01, height)  # Ensure minimum valid height
+        self.depth = max(0.01, depth)  # Ensure minimum valid depth
+        self.caps = caps
+        self.position = position if position else [0.0, 0.0, 0.0]
+        self.name = name
+
+        # Set default wall thickness to 5% of width if not specified
+        self.wall_thickness = (
+            wall_thickness if wall_thickness is not None else 0.05 * self.width
+        )
+
+        # Set default material if none provided
+        self.material = material if material else DEFAULT_MATERIAL
+
+        # Set materials for different parts, falling back to the main material if not specified
+        self.side_material = side_material if side_material else self.material
+        self.top_material = top_material if top_material else self.material
+        self.bottom_material = bottom_material if bottom_material else self.material
+
+        # Create the mesh components
+        self._create_prism_meshes()
+
+        # Store a reference to the combined mesh for backwards compatibility
+        self.mesh = self.get_mesh()
+
+    def _create_prism_meshes(self) -> None:
+        """
+        Create separate mesh components for the prism sides, top, and bottom.
+        Each part can have its own material.
+        """
+        # Create the side meshes (four walls)
+        self.sides = self._create_side_meshes()
+
+        # Create cap meshes if requested
+        self.top_mesh = self._create_top_cap_mesh() if self.caps else None
+        self.bottom_mesh = self._create_bottom_cap_mesh() if self.caps else None
+
+        # Apply transformation to all components if position is not at origin
+        if self.position != [0.0, 0.0, 0.0]:
+            T = np.eye(4)
+            T[:3, 3] = self.position
+
+            for side_mesh in self.sides:
+                side_mesh.apply_transform(T)
+
+            if self.top_mesh:
+                self.top_mesh.apply_transform(T)
+
+            if self.bottom_mesh:
+                self.bottom_mesh.apply_transform(T)
+
+    def _create_side_meshes(self) -> List[trimesh.Trimesh]:
+        """
+        Create the rectangular prism side (walls) meshes with their materials.
+
+        Returns:
+            A list of trimesh.Trimesh objects representing the prism sides
+        """
+        # Calculate dimensions
+        half_width = self.width / 2
+        half_height = self.height / 2
+        half_depth = self.depth / 2
+        inner_half_width = max(0.001, half_width - self.wall_thickness)
+        inner_half_depth = max(0.001, half_depth - self.wall_thickness)
+
+        side_meshes = []
+
+        # Front side (+Z face)
+        front_vertices = [
+            # Outer vertices
+            [-half_width, -half_height, half_depth],  # 0: bottom-left
+            [-half_width, half_height, half_depth],  # 1: top-left
+            [half_width, half_height, half_depth],  # 2: top-right
+            [half_width, -half_height, half_depth],  # 3: bottom-right
+            # Inner vertices (if hollow)
+            [-inner_half_width, -half_height, half_depth],  # 4: inner bottom-left
+            [-inner_half_width, half_height, half_depth],  # 5: inner top-left
+            [inner_half_width, half_height, half_depth],  # 6: inner top-right
+            [inner_half_width, -half_height, half_depth],  # 7: inner bottom-right
+        ]
+
+        front_faces = []
+        # Outer face triangles
+        front_faces.append([0, 1, 3])  # First triangle
+        front_faces.append([1, 2, 3])  # Second triangle
+
+        # Inner face triangles (reversed winding order for inside face)
+        front_faces.append([4, 7, 5])  # First inner triangle
+        front_faces.append([5, 7, 6])  # Second inner triangle
+
+        # Connect outer to inner edges
+        front_faces.append([0, 4, 1])  # Left edge top tri
+        front_faces.append([1, 4, 5])  # Left edge bottom tri
+        front_faces.append([2, 6, 3])  # Right edge top tri
+        front_faces.append([3, 6, 7])  # Right edge bottom tri
+        front_faces.append([1, 5, 2])  # Top edge left tri
+        front_faces.append([2, 5, 6])  # Top edge right tri
+        front_faces.append([0, 3, 4])  # Bottom edge left tri
+        front_faces.append([3, 7, 4])  # Bottom edge right tri
+
+        front_mesh = trimesh.Trimesh(vertices=front_vertices, faces=front_faces)
+
+        # Apply material
+        front_mesh.visual.material = trimesh.visual.material.PBRMaterial(
+            baseColorFactor=self.side_material.get(
+                "baseColorFactor", [1.0, 1.0, 1.0, 1.0]
+            ),
+            metallicFactor=self.side_material.get("metallicFactor", 0.0),
+            roughnessFactor=self.side_material.get("roughnessFactor", 0.0),
+            emissiveFactor=self.side_material.get("emissiveFactor", [0.0, 0.0, 0.0]),
+            doubleSided=self.side_material.get("doubleSided", False),
+        )
+
+        # Add front side to the list
+        side_meshes.append(front_mesh)
+
+        # Back side (-Z face) - mirror of front
+        back_vertices = [
+            # Outer vertices
+            [half_width, -half_height, -half_depth],  # 0: bottom-left
+            [half_width, half_height, -half_depth],  # 1: top-left
+            [-half_width, half_height, -half_depth],  # 2: top-right
+            [-half_width, -half_height, -half_depth],  # 3: bottom-right
+            # Inner vertices (if hollow)
+            [inner_half_width, -half_height, -half_depth],  # 4: inner bottom-left
+            [inner_half_width, half_height, -half_depth],  # 5: inner top-left
+            [-inner_half_width, half_height, -half_depth],  # 6: inner top-right
+            [-inner_half_width, -half_height, -half_depth],  # 7: inner bottom-right
+        ]
+
+        # Use the same face structure as front
+        back_mesh = trimesh.Trimesh(vertices=back_vertices, faces=front_faces)
+
+        # Apply material
+        back_mesh.visual.material = front_mesh.visual.material
+
+        # Add back side to the list
+        side_meshes.append(back_mesh)
+
+        # Left side (-X face)
+        left_vertices = [
+            # Outer vertices
+            [-half_width, -half_height, -half_depth],  # 0: bottom-left
+            [-half_width, half_height, -half_depth],  # 1: top-left
+            [-half_width, half_height, half_depth],  # 2: top-right
+            [-half_width, -half_height, half_depth],  # 3: bottom-right
+            # Inner vertices (if hollow)
+            [-half_width, -half_height, -inner_half_depth],  # 4: inner bottom-left
+            [-half_width, half_height, -inner_half_depth],  # 5: inner top-left
+            [-half_width, half_height, inner_half_depth],  # 6: inner top-right
+            [-half_width, -half_height, inner_half_depth],  # 7: inner bottom-right
+        ]
+
+        # Use the same face structure as front
+        left_mesh = trimesh.Trimesh(vertices=left_vertices, faces=front_faces)
+
+        # Apply material
+        left_mesh.visual.material = front_mesh.visual.material
+
+        # Add left side to the list
+        side_meshes.append(left_mesh)
+
+        # Right side (+X face)
+        right_vertices = [
+            # Outer vertices
+            [half_width, -half_height, half_depth],  # 0: bottom-left
+            [half_width, half_height, half_depth],  # 1: top-left
+            [half_width, half_height, -half_depth],  # 2: top-right
+            [half_width, -half_height, -half_depth],  # 3: bottom-right
+            # Inner vertices (if hollow)
+            [half_width, -half_height, inner_half_depth],  # 4: inner bottom-left
+            [half_width, half_height, inner_half_depth],  # 5: inner top-left
+            [half_width, half_height, -inner_half_depth],  # 6: inner top-right
+            [half_width, -half_height, -inner_half_depth],  # 7: inner bottom-right
+        ]
+
+        # Use the same face structure as front
+        right_mesh = trimesh.Trimesh(vertices=right_vertices, faces=front_faces)
+
+        # Apply material
+        right_mesh.visual.material = front_mesh.visual.material
+
+        # Add right side to the list
+        side_meshes.append(right_mesh)
+
+        return side_meshes
+
+    def _create_top_cap_mesh(self) -> trimesh.Trimesh:
+        """
+        Create the top cap mesh using the Rectangle class.
+
+        Returns:
+            A trimesh.Trimesh object representing the prism top cap
+        """
+        # Use the Rectangle class to create the top cap
+        top_rectangle = Rectangle(
+            width=self.width,
+            depth=self.depth,
+            facing="up",
+            position=[0, self.height / 2, 0],
+            material=self.top_material,
+            name=f"{self.name}_top",
+            thickness=self.wall_thickness if self.wall_thickness > 0 else None,
+        )
+
+        # Return just the mesh component
+        return top_rectangle.mesh
+
+    def _create_bottom_cap_mesh(self) -> trimesh.Trimesh:
+        """
+        Create the bottom cap mesh using the Rectangle class.
+
+        Returns:
+            A trimesh.Trimesh object representing the prism bottom cap
+        """
+        # Use the Rectangle class to create the bottom cap
+        bottom_rectangle = Rectangle(
+            width=self.width,
+            depth=self.depth,
+            facing="down",  # This ensures proper face orientation
+            position=[0, -self.height / 2, 0],
+            material=self.bottom_material,
+            name=f"{self.name}_bottom",
+            thickness=self.wall_thickness if self.wall_thickness > 0 else None,
+        )
+
+        # Return just the mesh component
+        return bottom_rectangle.mesh
+
+    def get_mesh(self) -> trimesh.Trimesh:
+        """
+        Get a combined rectangular prism mesh object with all parts.
+
+        Returns:
+            mesh: The rectangular prism as a single combined trimesh.Trimesh object
+        """
+        # Create a list to hold the meshes to combine
+        meshes = self.sides.copy()
+        if self.top_mesh:
+            meshes.append(self.top_mesh)
+        if self.bottom_mesh:
+            meshes.append(self.bottom_mesh)
+
+        # Combine all meshes into one
+        combined_mesh = trimesh.util.concatenate(meshes)
+        return combined_mesh
+
+    def get_scene(self) -> trimesh.Scene:
+        """
+        Get the rectangular prism as a scene object with separate meshes for sides, top, and bottom.
+        This preserves the separate materials for each part.
+
+        Returns:
+            scene: The rectangular prism as a trimesh.Scene object with separate meshes
+        """
+        scene = trimesh.Scene()
+
+        # Add each side with its own name
+        side_names = ["front", "back", "left", "right"]
+        for i, side_mesh in enumerate(self.sides):
+            scene.add_geometry(side_mesh, node_name=f"{self.name}_{side_names[i]}")
+
+        if self.top_mesh:
+            scene.add_geometry(self.top_mesh, node_name=f"{self.name}_top")
+
+        if self.bottom_mesh:
+            scene.add_geometry(self.bottom_mesh, node_name=f"{self.name}_bottom")
+
+        return scene
+
+    def save(self, file_path: str) -> bool:
+        """
+        Save the rectangular prism to a file.
+
+        Args:
+            file_path: Path to save the file to (supports formats like .glb, .obj, .stl)
+
+        Returns:
+            True if saved successfully, False otherwise
+        """
+        try:
+            # Use get_scene to preserve separate materials
+            scene = self.get_scene()
+            scene.export(file_path)
+            return True
+        except Exception as e:
+            print(f"Error saving rectangular prism: {e}")
+            return False
+
+    def update_side_material(self, material: Dict[str, Any]) -> None:
+        """
+        Update the material of all rectangular prism sides.
+
+        Args:
+            material: Dictionary of material properties
+        """
+        self.side_material = material
+
+        # Create and apply new material
+        pbr_material = trimesh.visual.material.PBRMaterial(
+            baseColorFactor=material.get("baseColorFactor", [1.0, 1.0, 1.0, 1.0]),
+            metallicFactor=material.get("metallicFactor", 0.0),
+            roughnessFactor=material.get("roughnessFactor", 0.0),
+            emissiveFactor=material.get("emissiveFactor", [0.0, 0.0, 0.0]),
+            doubleSided=material.get("doubleSided", False),
+        )
+
+        # Apply to all side meshes
+        for side_mesh in self.sides:
+            side_mesh.visual.material = pbr_material
+
+        # Update the combined mesh for backward compatibility
+        self.mesh = self.get_mesh()
+
+    def update_top_material(self, material: Dict[str, Any]) -> None:
+        """
+        Update the material of the rectangular prism top cap.
+
+        Args:
+            material: Dictionary of material properties
+        """
+        if not self.caps or self.top_mesh is None:
+            print("Warning: Rectangular prism has no top cap to update")
+            return
+
+        self.top_material = material
+
+        # Create and apply new material
+        pbr_material = trimesh.visual.material.PBRMaterial(
+            baseColorFactor=material.get("baseColorFactor", [1.0, 1.0, 1.0, 1.0]),
+            metallicFactor=material.get("metallicFactor", 0.0),
+            roughnessFactor=material.get("roughnessFactor", 0.0),
+            emissiveFactor=material.get("emissiveFactor", [0.0, 0.0, 0.0]),
+            doubleSided=material.get("doubleSided", False),
+        )
+
+        # Apply to top cap mesh
+        self.top_mesh.visual.material = pbr_material
+
+        # Update the combined mesh for backward compatibility
+        self.mesh = self.get_mesh()
+
+    def update_bottom_material(self, material: Dict[str, Any]) -> None:
+        """
+        Update the material of the rectangular prism bottom cap.
+
+        Args:
+            material: Dictionary of material properties
+        """
+        if not self.caps or self.bottom_mesh is None:
+            print("Warning: Rectangular prism has no bottom cap to update")
+            return
+
+        self.bottom_material = material
+
+        # Create and apply new material
+        pbr_material = trimesh.visual.material.PBRMaterial(
+            baseColorFactor=material.get("baseColorFactor", [1.0, 1.0, 1.0, 1.0]),
+            metallicFactor=material.get("metallicFactor", 0.0),
+            roughnessFactor=material.get("roughnessFactor", 0.0),
+            emissiveFactor=material.get("emissiveFactor", [0.0, 0.0, 0.0]),
+            doubleSided=material.get("doubleSided", False),
+        )
+
+        # Apply to bottom cap mesh
+        self.bottom_mesh.visual.material = pbr_material
+
+        # Update the combined mesh for backward compatibility
+        self.mesh = self.get_mesh()
+
+
+# -----------------------------------------------------------------------------
 # Cylindrical base building block
 # -----------------------------------------------------------------------------
 class Cylinder:
