@@ -409,8 +409,8 @@ class Rectangle:
     like rectangular prism caps or other geometric primitives.
 
     Specify:
-    - width: The width of the rectangle (X axis)
-    - depth: The depth of the rectangle (Z axis)
+    - width: The width of the rectangle (minor axis, X axis)
+    - length: The length of the rectangle (major axis, Z axis)
     - facing: The direction the rectangle faces ('up', 'down', or a custom vector)
     - position: The center position of the rectangle
     """
@@ -418,7 +418,7 @@ class Rectangle:
     def __init__(
         self,
         width: float = 2.0,
-        depth: float = 2.0,
+        length: float = 2.0,
         facing: Union[str, List[float]] = "up",
         position: Optional[List[float]] = None,
         material: Optional[Dict[str, Any]] = None,
@@ -429,8 +429,8 @@ class Rectangle:
         Initialize a rectangle object.
 
         Args:
-            width: Width of the rectangle along X axis (default: 2.0)
-            depth: Depth of the rectangle along Z axis (default: 2.0)
+            width: Width of the rectangle along minor axis (X axis) (default: 2.0)
+            length: Length of the rectangle along major axis (Z axis) (default: 2.0)
             facing: Direction the rectangle faces - 'up' (+Y), 'down' (-Y), or a custom [x,y,z] vector
                     (default: 'up')
             position: [x, y, z] position of the center of the rectangle (default: [0, 0, 0])
@@ -441,7 +441,7 @@ class Rectangle:
                       If None, defaults to 1% of the width (0.01 * width)
         """
         self.width = max(0.01, width)  # Ensure minimum valid width
-        self.depth = max(0.01, depth)  # Ensure minimum valid depth
+        self.length = max(0.01, length)  # Ensure minimum valid length
         self.position = position if position else [0.0, 0.0, 0.0]
         self.name = name
 
@@ -496,16 +496,15 @@ class Rectangle:
 
         Returns:
             A trimesh.Trimesh object representing a flat rectangle
-        """
-        # Create the vertices for the rectangle (centered at origin)
+        """  # Create the vertices for the rectangle (centered at origin)
         half_width = self.width / 2
-        half_depth = self.depth / 2
+        half_length = self.length / 2
 
         vertices = [
-            [-half_width, 0.0, -half_depth],  # bottom-left
-            [-half_width, 0.0, half_depth],  # top-left
-            [half_width, 0.0, half_depth],  # top-right
-            [half_width, 0.0, -half_depth],  # bottom-right
+            [-half_width, 0.0, -half_length],  # bottom-left
+            [-half_width, 0.0, half_length],  # top-left
+            [half_width, 0.0, half_length],  # top-right
+            [half_width, 0.0, -half_length],  # bottom-right
         ]
 
         # Create faces for the rectangle
@@ -526,24 +525,23 @@ class Rectangle:
 
         Returns:
             A trimesh.Trimesh object representing a 3D block
-        """
-        # Calculate half dimensions
+        """  # Calculate half dimensions
         half_width = self.width / 2
-        half_depth = self.depth / 2
+        half_length = self.length / 2
         half_thickness = self.thickness / 2
 
         # Create vertices for the block (8 corners)
         vertices = [
             # Bottom face vertices (negative Y)
-            [-half_width, -half_thickness, -half_depth],  # 0: bottom-left-back
-            [-half_width, -half_thickness, half_depth],  # 1: bottom-left-front
-            [half_width, -half_thickness, half_depth],  # 2: bottom-right-front
-            [half_width, -half_thickness, -half_depth],  # 3: bottom-right-back
+            [-half_width, -half_thickness, -half_length],  # 0: bottom-left-back
+            [-half_width, -half_thickness, half_length],  # 1: bottom-left-front
+            [half_width, -half_thickness, half_length],  # 2: bottom-right-front
+            [half_width, -half_thickness, -half_length],  # 3: bottom-right-back
             # Top face vertices (positive Y)
-            [-half_width, half_thickness, -half_depth],  # 4: top-left-back
-            [-half_width, half_thickness, half_depth],  # 5: top-left-front
-            [half_width, half_thickness, half_depth],  # 6: top-right-front
-            [half_width, half_thickness, -half_depth],  # 7: top-right-back
+            [-half_width, half_thickness, -half_length],  # 4: top-left-back
+            [-half_width, half_thickness, half_length],  # 5: top-left-front
+            [half_width, half_thickness, half_length],  # 6: top-right-front
+            [half_width, half_thickness, -half_length],  # 7: top-right-back
         ]
 
         # Create faces for the block (6 faces, 12 triangles)
@@ -903,11 +901,10 @@ class RectangularPrism:
 
         Returns:
             A trimesh.Trimesh object representing the prism top cap
-        """
-        # Use the Rectangle class to create the top cap
+        """  # Use the Rectangle class to create the top cap
         top_rectangle = Rectangle(
             width=self.width,
-            depth=self.depth,
+            length=self.depth,
             facing="up",
             position=[0, self.height / 2, 0],
             material=self.top_material,
@@ -924,11 +921,10 @@ class RectangularPrism:
 
         Returns:
             A trimesh.Trimesh object representing the prism bottom cap
-        """
-        # Use the Rectangle class to create the bottom cap
+        """  # Use the Rectangle class to create the bottom cap
         bottom_rectangle = Rectangle(
             width=self.width,
-            depth=self.depth,
+            length=self.depth,
             facing="down",  # This ensures proper face orientation
             position=[0, -self.height / 2, 0],
             material=self.bottom_material,
